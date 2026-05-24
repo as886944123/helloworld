@@ -1,4 +1,4 @@
-name: ImmortalWrt Plugin Build
+name: ImmortalWrt aarch64_generic Build
 
 on:
   push:
@@ -16,36 +16,14 @@ on:
         description: '要编译的插件（空格分隔，留空自动检测）'
         required: false
         default: ''
-      arch:
-        description: '要编译的架构（all=全部，多个用空格分隔）'
-        required: false
-        default: 'all'
 
 jobs:
   build:
-    name: Build ${{ matrix.arch }}
+    name: Build aarch64_generic
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch: arm_cortex-a9_vfpv3-d16
-            target: mvebu-cortexa9
-          - arch: mips_24kc
-            target: ath79-generic
-          - arch: mipsel_24kc
-            target: mt7621
-          - arch: aarch64_cortex-a53
-            target: mvebu-cortexa53
-          - arch: arm_cortex-a15_neon-vfpv4
-            target: armvirt-32
-          - arch: aarch64_cortex-a72
-            target: bcm2711
-          - arch: aarch64_generic
-            target: armvirt-64
-          - arch: x86_64
-            target: x86-64
 
     steps:
       - name: Checkout code
@@ -69,9 +47,9 @@ jobs:
         id: cache-sdk
         with:
           path: sdk
-          key: ${{ matrix.arch }}-${{ hashFiles('**/Makefile') }}
+          key: aarch64_generic-${{ hashFiles('**/Makefile') }}
           restore-keys: |
-            ${{ matrix.arch }}-
+            aarch64_generic-
 
       - name: Determine branch name
         run: |
@@ -113,7 +91,7 @@ jobs:
               done
             done
             
-            # 无修改时默认编译的插件
+            # 无修改时默认编译的插件（可根据你的需求修改）
             PACKAGES="${PACKAGES:-luci-app-ssr-plus luci-app-passwall luci-app-openclash}"
           fi
           
@@ -124,8 +102,8 @@ jobs:
       - name: Build packages
         uses: immortalwrt/gh-action-sdk@v7
         env:
-          ARCH: ${{ matrix.arch }}
-          TARGET: ${{ matrix.target }}
+          ARCH: aarch64_generic
+          TARGET: armvirt-64
           FEEDNAME: packages_ci
           PACKAGES: $PACKAGES
           V: s
@@ -137,21 +115,21 @@ jobs:
         id: build-status
         run: |
           shopt -s nullglob
-          IPKS=( bin/packages/${{ matrix.arch }}/packages_ci/*.ipk )
+          IPKS=( bin/packages/aarch64_generic/packages_ci/*.ipk )
           if [ ${#IPKS[@]} -gt 0 ]; then
             echo "status=success" >> $GITHUB_OUTPUT
-            echo "Build succeeded, ${#IPKS[@]} packages generated"
+            echo "✅ Build succeeded, ${#IPKS[@]} packages generated"
           else
             echo "status=failure" >> $GITHUB_OUTPUT
-            echo "Build failed, no packages generated"
+            echo "❌ Build failed, no packages generated"
           fi
 
       - name: Move packages
         if: steps.build-status.outputs.status == 'success'
         run: |
           mkdir -p output
-          cp -f bin/packages/${{ matrix.arch }}/packages_ci/*.ipk output/
-          cp -f bin/packages/${{ matrix.arch }}/packages_ci/Packages* output/
+          cp -f bin/packages/aarch64_generic/packages_ci/*.ipk output/
+          cp -f bin/packages/aarch64_generic/packages_ci/Packages* output/
 
       - name: Generate metadata
         run: |
@@ -171,7 +149,7 @@ jobs:
             PRNUMBER="push-$MERGE_ID"
           fi
           
-          ARCHIVE_NAME=${{ matrix.arch }}-$PRNUMBER
+          ARCHIVE_NAME=aarch64_generic-$PRNUMBER
           echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
           
           shopt -s nullglob
@@ -184,8 +162,8 @@ jobs:
           Build ID: $GITHUB_RUN_ID
           Build Time: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           Branch: $BRANCH
-          Architecture: ${{ matrix.arch }}
-          Target: ${{ matrix.target }}
+          Architecture: aarch64_generic (通用ARM64)
+          Target: armvirt-64
           Commit: $HEAD_ID
           Base Commit: $BASE_ID
           Build Trigger: $GITHUB_EVENT_NAME
@@ -215,7 +193,7 @@ jobs:
         with:
           name: ${{ env.ARCHIVE_NAME }}-packages
           path: output/*
-          retention-days: 30
+          retention-days: 90  # 免费版最大保留90天
 
       - name: Upload logs
         if: steps.build-status.outputs.status == 'failure'
@@ -223,16 +201,4 @@ jobs:
         with:
           name: ${{ env.ARCHIVE_NAME }}-logs
           path: logs/*
-          retention-days: 14
-
-  cleanup:
-    name: Cleanup old artifacts
-    runs-on: ubuntu-latest
-    needs: build
-    if: always()
-    steps:
-      - name: Delete old artifacts
-        uses: c-hive/gha-remove-artifacts@v1
-        with:
-          age: '7 days'
-          skip-recent: 5
+          retention-days: 30
