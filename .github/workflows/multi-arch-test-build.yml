@@ -45,7 +45,7 @@ jobs:
                   PACKAGES="$PACKAGES $(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')"
                   break
                 fi
-              end
+              done  # 这里之前错误地写成了end
             done
             
             PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
@@ -55,7 +55,7 @@ jobs:
           echo "编译插件: $PACKAGES"
 
       - name: 编译插件
-        uses: immortalwrt/gh-action-sdk@v6  # 这里从v7改成v6
+        uses: immortalwrt/gh-action-sdk@v6  # 使用v6稳定版，避免权限错误
         env:
           ARCH: aarch64_generic
           TARGET: armvirt-64
