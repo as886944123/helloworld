@@ -48,6 +48,8 @@ jobs:
           tar -xJf immortalwrt-sdk-*.tar.xz
           mkdir -p sdk
           mv immortalwrt-sdk-*/* sdk/
+          # 完成
+          echo "SDK 解压并移动到 sdk 目录成功！"
 
       - name: 配置并更新源
         run: |
