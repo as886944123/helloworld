@@ -30,7 +30,7 @@ jobs:
           swap-storage: true
 
       - name: 安装编译依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip bzip2 aria2v
+        run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip bzip2 aria2
 
       - name: 下载 ImmortalWrt SDK
         run: |
@@ -53,7 +53,7 @@ jobs:
       - name: 下载插件依赖
         run: |
           cd sdk
-          make package/${{ inputs.packages }}/download V=s -j$(nproc)
+          make package/${{ inputs.packages }}/compile V=s -j$(nproc)
 
       - name: 编译插件（多线程，速度提升 5~10 倍）
         run: |
