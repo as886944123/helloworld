@@ -1,68 +1,47 @@
 name: Build aarch64_generic
 
 on:
-  push:
-    branches: [master, main]
   workflow_dispatch:
     inputs:
       packages:
-        description: "要编译的插件"
+        description: "插件名"
         required: false
         default: "luci-app-ssr-plus"
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 240  # 已延长到 4 小时，彻底解决超时
-    env:
-      TERM: xterm
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: 清理磁盘空间
+      - name: 清理磁盘
         uses: jlumbroso/free-disk-space@main
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          docker-images: true
-          swap-storage: true
 
-      - name: 安装编译依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip bzip2 aria2
+      - name: 安装依赖
+        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
 
-      - name: 下载 ImmortalWrt SDK
+      - name: 下载SDK
         run: |
-          aria2c -x 8 https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-sdk-23.05.4-tegra-generic_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
-          mkdir -p sdk
-          tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
+          aria2c -x 8 https://mirrors.zju.edu.cn/immortalwrt/releases/23.05.4/targets/armsr/armv8/immortalwrt-sdk-23.05.4-armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          mkdir sdk && tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
 
-      - name: 更新 feeds 并安装插件源
+      - name: 安装 feeds
         run: |
           cd sdk
           echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: 生成编译配置
-        run: |
-          cd sdk
+          ./scripts/feeds update -a && ./scripts/feeds install -a
           make defconfig
 
-      - name: 下载插件依赖
+      - name: 编译
         run: |
           cd sdk
+          make package/${{ inputs.packages }}/download V=s -j$(nproc)
           make package/${{ inputs.packages }}/compile V=s -j$(nproc)
 
-      - name: 编译插件（多线程，速度提升 5~10 倍）
-        run: |
-          cd sdk
-          make package/${{ inputs.packages }}/compile V=s -j$(nproc)
-
-      - name: 上传编译好的 ipk 插件
+      - name: 上传插件
         uses: actions/upload-artifact@v4
         with:
           name: packages
-          path: sdk/bin/packages/*/helloworld/*.ipk
-          retention-days: 90
+          path: sdk/bin/packages/aarch64_generic/helloworld/*.ipk
