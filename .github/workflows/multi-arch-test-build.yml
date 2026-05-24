@@ -45,7 +45,7 @@ jobs:
                   PACKAGES="$PACKAGES $(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')"
                   break
                 fi
-              done
+              end
             done
             
             PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
@@ -55,7 +55,7 @@ jobs:
           echo "编译插件: $PACKAGES"
 
       - name: 编译插件
-        uses: immortalwrt/gh-action-sdk@v7
+        uses: immortalwrt/gh-action-sdk@v6  # 这里从v7改成v6
         env:
           ARCH: aarch64_generic
           TARGET: armvirt-64
