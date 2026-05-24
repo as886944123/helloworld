@@ -20,23 +20,12 @@ jobs:
         uses: jlumbroso/free-disk-space@main
 
       - name: 安装依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2 zstd
+        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
 
       - name: 下载SDK
         run: |
-          FILE="releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
-          MIRRORS=(
-            "https://downloads.immortalwrt.org"
-            "https://mirrors.zju.edu.cn/immortalwrt"
-            "https://mirrors.ustc.edu.cn/immortalwrt"
-            "https://mirror.sjtu.edu.cn/immortalwrt"
-          )
-          for url in "${MIRRORS[@]}"; do
-            echo "尝试下载: $url/$FILE"
-            aria2c -x 8 -s 8 --timeout=60 --retries=3 "$url/$FILE" && break
-          done
-          mkdir -p sdk
-          tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
+          aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          mkdir sdk && tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
 
       - name: 安装 feeds
         run: |
@@ -45,7 +34,7 @@ jobs:
           ./scripts/feeds update -a && ./scripts/feeds install -a
           make defconfig
 
-      - name: 编译插件
+      - name: 编译
         run: |
           cd sdk
           make package/${{ inputs.packages }}/download V=s -j$(nproc)
