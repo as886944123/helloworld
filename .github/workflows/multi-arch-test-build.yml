@@ -18,12 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 终极权限修复（Ubuntu 22.04专用）
-      - name: 修复工作目录权限
-        run: |
-          sudo chown -R 1001:121 /home/runner/work
-          sudo chmod -R 755 /home/runner/work
-
       - name: 清理磁盘
         uses: jlumbroso/free-disk-space@main
         with:
@@ -36,36 +30,28 @@ jobs:
       - name: 安装编译依赖
         run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip
 
-      # 使用清华镜像下载SDK，解决网络问题
-      - name: 下载ImmortalWrt 23.05.4 SDK
+      - name: 下载并正确解压 SDK
         run: |
           aria2c -x 3 https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-sdk-23.05.4-tegra-generic_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
-          echo "==== 下载后文件检查 ===="
-          ls -lh *.tar.xz
-          file *.tar.xz
-          du -sh *.tar.xz
           
-          tar -xJf immortalwrt-sdk-*.tar.xz
+          # 【正确解压】直接解压到 sdk 目录，不产生嵌套
           mkdir -p sdk
-          mv immortalwrt-sdk-*/* sdk/
-          # 完成
-          echo "SDK 解压并移动到 sdk 目录成功！"
+          tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
 
-      - name: 配置并更新源
+      - name: 配置 feeds（无循环、无嵌套）
         run: |
           cd sdk
-          echo "src-link helloworld $GITHUB_WORKSPACE" >> feeds.conf.default
+          # 【关键修复】使用 src-git 方式，不会产生文件系统循环
+          echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
+          
+          ./scripts/feeds clean
           ./scripts/feeds update helloworld
           ./scripts/feeds install -a -p helloworld
 
-      - name: 下载依赖（带重试）
+      - name: 下载依赖
         run: |
           cd sdk
-          for i in {1..5}; do
-            make package/${{ inputs.packages }}/download V=s && break
-            echo "依赖下载失败，第$i次重试..."
-            sleep 10
-          done
+          make package/${{ inputs.packages }}/download V=s
 
       - name: 编译插件
         run: |
@@ -76,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: aarch64_generic-packages
-          path: sdk/bin/packages/aarch64_generic/helloworld/*.ipk
+          path: sdk/bin/packages/*/helloworld/*.ipk
           retention-days: 90
 
       - name: 上传日志（失败时）
