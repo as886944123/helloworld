@@ -27,12 +27,12 @@ jobs:
           aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
 
-      #- name: 安装 feeds
-        #run: |
-          #cd sdk
-          #echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
-          #./scripts/feeds update -a && ./scripts/feeds install -a
-          #make defconfig
+      - name: 安装 feeds
+        run: |
+          cd sdk
+          echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
+          ./scripts/feeds update -a && ./scripts/feeds install -a
+          make defconfig
 
       - name: 编译
         run: |
