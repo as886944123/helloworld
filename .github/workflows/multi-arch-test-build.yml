@@ -1,6 +1,6 @@
-name名称：构建 aarch64_GENERICBuild aarch64_generic
+name: Build aarch64_generic
 
-:
+on:
   push:
     branches: [master, main]
   workflow_dispatch:
