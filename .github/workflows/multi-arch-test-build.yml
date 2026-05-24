@@ -19,22 +19,16 @@ jobs:
         include:
           - arch: arm_cortex-a9_vfpv3-d16
             target: mvebu-cortexa9
-
           - arch: mips_24kc
             target: ath79-generic
-
           - arch: mipsel_24kc
             target: mt7621
-
           - arch: aarch64_cortex-a53
             target: mvebu-cortexa53
-
           - arch: arm_cortex-a15_neon-vfpv4
             target: armvirt-32
-
           - arch: i386_pentium-mmx
             target: x86-geode
-
           - arch: x86_64
             target: x86-64
 
@@ -66,7 +60,6 @@ jobs:
 
       - name: Determine changed packages
         run: |
-          # only detect packages with changes
           PKG_ROOTS=$(find . -name Makefile | \
             grep -v ".*/src/Makefile" | \
             sed -e 's@./\(.*\)/Makefile@\1/@')
@@ -77,7 +70,7 @@ jobs:
             BASE_REF="HEAD^"
           fi
           
-          CHANGES=$(git diff --diff-filter=d --name-only $BASE_REF HEAD)
+          CHANGES=$(git diff --diff-filter=d --name-only $BASE_REF HEAD || true)
 
           PACKAGES=""
           for ROOT in $PKG_ROOTS; do
@@ -90,12 +83,10 @@ jobs:
             done
           done
           
-          # fallback to test packages if nothing explicitly changes
           PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
-          # clear spaces
           PACKAGES=$(echo $PACKAGES | xargs)
 
-          echo "Building $PACKAGES"
+          echo "Building packages: $PACKAGES"
           echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
 
       - name: Build
@@ -104,40 +95,35 @@ jobs:
           ARCH: ${{ matrix.arch }}
           FEEDNAME: packages_ci
           V: s
-          target: ${{ matrix.target }}
-          packages: ${{ env.PACKAGES }}
+          TARGET: ${{ matrix.target }}
+          PACKAGES: ${{ env.PACKAGES }}
 
-      - name: Move created packages to project dir
-        run: cp bin/packages/${{ matrix.arch }}/packages_ci/*.ipk . || true
+      - name: Move packages
+        run: cp -f bin/packages/${{ matrix.arch }}/packages_ci/*.ipk . 2>/dev/null || true
 
-      - name: Collect metadata
+      - name: Generate metadata
         run: |
           MERGE_ID=$(git rev-parse --short HEAD)
           
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            BASE_ID=$(git rev-parse --short origin/$BRANCH)
+            BASE_ID=$(git rev-parse --short origin/$BRANCH 2>/dev/null || echo "unknown")
             HEAD_ID=$(git rev-parse --short HEAD)
             PRNUMBER=${GITHUB_REF_NAME%/merge}
           else
-            BASE_ID=$(git rev-parse --short HEAD^)
+            BASE_ID=$(git rev-parse --short HEAD^ 2>/dev/null || echo "unknown")
             HEAD_ID=$MERGE_ID
             PRNUMBER="push-$MERGE_ID"
           fi
           
-          echo "MERGE_ID=$MERGE_ID" >> $GITHUB_ENV
-          echo "BASE_ID=$BASE_ID" >> $GITHUB_ENV
-          echo "HEAD_ID=$HEAD_ID" >> $GITHUB_ENV
-          echo "PRNUMBER=$PRNUMBER" >> $GITHUB_ENV
-          echo "ARCHIVE_NAME=${{ matrix.arch }}-$PRNUMBER" >> $GITHUB_ENV
-
-      - name: Generate metadata
-        run: |
+          ARCHIVE_NAME=${{ matrix.arch }}-$PRNUMBER
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
+          
           shopt -s nullglob
           IPKS=( *.ipk )
           
           cat << EOF > PKG-INFO
           Metadata-Version: 2.1
-          Name: ${{ env.ARCHIVE_NAME }}
+          Name: $ARCHIVE_NAME
           Version: $BRANCH
           Author: $GITHUB_ACTOR
           Home-page: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY
@@ -145,30 +131,20 @@ jobs:
           Summary: $PACKAGES
           Platform: ${{ matrix.arch }}
 
-          Packages for ImmortalWrt $BRANCH running on ${{ matrix.arch }}, built from $PRNUMBER
-          at commit $HEAD_ID, against $BRANCH at commit $BASE_ID.
+          Packages for ImmortalWrt $BRANCH on ${{ matrix.arch }}, built from $PRNUMBER
+          Commit: $HEAD_ID, Base: $BASE_ID
 
           Modified packages:
           EOF
           
-          for p in $PACKAGES; do
-            echo "  $p" >> PKG-INFO
-          done
-
-          echo >> PKG-INFO
-          echo "Package count: ${#IPKS[@]}" >> PKG-INFO
-          echo "Package size summary:" >> PKG-INFO
-          for f in "${IPKS[@]}"; do
-            du -sh "$f" >> PKG-INFO
-          done
-
-          if [ ${#IPKS[@]} -eq 0 ]; then
-            echo "No packages built." >> PKG-INFO
-          fi
-
+          for p in $PACKAGES; do echo "  - $p" >> PKG-INFO; done
+          echo -e "\nPackage count: ${#IPKS[@]}" >> PKG-INFO
+          echo "Package sizes:" >> PKG-INFO
+          for f in "${IPKS[@]}"; do du -sh "$f" >> PKG-INFO; done
+          [ ${#IPKS[@]} -eq 0 ] && echo "No packages built." >> PKG-INFO
           cat PKG-INFO
 
-      - name: Store packages
+      - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARCHIVE_NAME }}-packages
@@ -178,7 +154,7 @@ jobs:
             *.ipk
             PKG-INFO
 
-      - name: Store logs
+      - name: Upload logs
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARCHIVE_NAME }}-logs
