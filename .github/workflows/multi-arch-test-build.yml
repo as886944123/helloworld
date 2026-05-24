@@ -60,7 +60,11 @@ jobs:
       - name: 编译插件
         run: |
           cd sdk
-          make package/${{ inputs.packages }}/compile V=s -j1
+          make package/${{ inputs.packages }}/compile V=s -j$(nproc)
+       jobs:
+         build:
+         timeout-minutes: 240  # 4小时
+         runs-on: ubuntu-latest
 
       - name: 上传插件
         uses: actions/upload-artifact@v4
