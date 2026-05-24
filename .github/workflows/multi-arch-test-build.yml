@@ -1,5 +1,4 @@
-name: Build aarch64_generic
-
+name: Build armv8
 on:
   workflow_dispatch:
     inputs:
@@ -16,16 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 清理磁盘
-        uses: jlumbroso/free-disk-space@main
+      #- name: 清理磁盘
+        #uses: jlumbroso/free-disk-space@main
 
-      - name: 安装依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
+      #- name: 安装依赖
+        #run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
 
-      - name: 下载SDK
-        run: |
-          aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
+      #- name: 下载SDK
+        #run: |
+          #aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          #mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
 
       - name: 安装 feeds
         run: |
@@ -44,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: packages
-          path: "sdk/**/*.ipk"  # ✅ 稳定版
-          if-no-files-found: error
+          path: sdk/bin/packages/armv8/helloworld/*.ipk
+         
