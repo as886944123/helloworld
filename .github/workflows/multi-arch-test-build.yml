@@ -16,15 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 清理磁盘
-        uses: jlumbroso/free-disk-space@main
+     # - name: 清理磁盘
+      #  uses: jlumbroso/free-disk-space@main
 
-      - name: 安装依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
+    #  - name: 安装依赖
+      #  run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
 
       - name: 下载SDK
         run: |
-          aria2c -x 8 https://downloads.immortalwrt.org/releases/23.05.4/targets/armsr/armv8/immortalwrt-sdk-23.05.4-armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           mkdir sdk && tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
 
       - name: 安装 feeds
