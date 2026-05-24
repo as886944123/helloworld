@@ -39,7 +39,7 @@ jobs:
       # 使用清华镜像下载SDK，解决网络问题
       - name: 下载ImmortalWrt 23.05.4 SDK
         run: |
-          wget -q https://mirrors.tuna.tsinghua.edu.cn/immortalwrt/releases/23.05.4/targets/armvirt/64/immortalwrt-sdk-23.05.4-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          wget -q https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-imagebuilder-23.05.4-tegra-generic.Linux-x86_64.tar.xz
           tar xf immortalwrt-sdk-*.tar.xz
           mv immortalwrt-sdk-* sdk
 
