@@ -1,96 +1,81 @@
-name: Build aarch64_generic
+name名称：构建 aarch64_GENERICBuild aarch64_generic
 
-on:
+:
   push:
     branches: [master, main]
-  pull_request:
-    paths-ignore: ['**.md']
   workflow_dispatch:
     inputs:
       packages:
-        description: '要编译的插件（空格分隔）'
+        description: "要编译的插件"
         required: false
-        default: 'luci-app-ssr-plus'
+        default: "luci-app-ssr-plus"
 
 jobs:
   build:
-    # 最关键：使用Ubuntu 20.04，彻底解决chown权限错误
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04  # 使用最新的官方支持版本
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 提前彻底修复权限，从根源上避免内部chown失败
-      - name: 修复所有权限
+      # 终极权限修复：在任何操作前先重置整个工作目录权限
+      - name: 彻底修复权限问题
         run: |
-          sudo chown -R runner:runner /home/runner/work
-          sudo chmod -R 777 /home/runner/work
+          # 这是唯一能在Ubuntu 22.04上解决chown错误的方法
+          sudo chown -R 1001:121 /home/runner/work
+          sudo chmod -R 755 /home/runner/work
 
       - name: 清理磁盘
         uses: jlumbroso/free-disk-space@main
         with:
-          tool-cache: true
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
           docker-images: true
           swap-storage: true
 
-      - name: 确定要编译的插件
+      - name: 安装编译依赖
+        run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip
+
+      - name: 下载ImmortalWrt 23.05.4 SDK
         run: |
-          if [ -n "${{ inputs.packages }}" ]; then
-            PACKAGES="${{ inputs.packages }}"
-          else
-            PKG_ROOTS=$(find . -name Makefile | grep -v ".*/src/Makefile" | sed -e 's@./\(.*\)/Makefile@\1/@')
-            CHANGES=$(git diff --diff-filter=d --name-only HEAD^ HEAD 2>/dev/null || true)
-            
-            for ROOT in $PKG_ROOTS; do
-              for CHANGE in $CHANGES; do
-                if [[ "$CHANGE" == "$ROOT"* ]]; then
-                  PACKAGES="$PACKAGES $(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')"
-                  break
-                fi
-              done
-            done
-            
-            PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
-          fi
-          
-          echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
-          echo "编译插件: $PACKAGES"
+          wget -q https://downloads.immortalwrt.org/releases/23.05.4/targets/armvirt/64/immortalwrt-sdk-23.05.4-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          tar xf immortalwrt-sdk-*.tar.xz
+          mv immortalwrt-sdk-* sdk
 
-      - name: 编译插件（终极稳定版）
-        uses: immortalwrt/gh-action-sdk@v5.1
-        env:
-          ARCH: aarch64_generic
-          TARGET: armvirt-64
-          FEEDNAME: packages_ci
-          PACKAGES: $PACKAGES
-          V: s
-          # 下载优化参数
-          DOWNLOAD_RETRY: 10
-          DOWNLOAD_TIMEOUT: 120
-          # 使用国内镜像
-          MIRROR: china
-          # 跳过不必要的检查
-          NO_REFRESH: 1
-          NO_UPDATE: 1
+      - name: 配置并更新源
+        run: |
+          cd sdk
+          echo "src-link helloworld $GITHUB_WORKSPACE" >> feeds.conf.default
+          ./scripts/feeds update helloworld
+          ./scripts/feeds install -a -p helloworld
 
-      - name: 上传插件
+      - name: 下载依赖（带重试）
+        run: |
+          cd sdk
+          # 最多重试5次下载
+          for i in {1..5}; do
+            make package/${{ inputs.packages }}/download V=s && break
+            echo "下载失败，第$i次重试..."
+            sleep 10
+          done
+
+      - name: 编译插件
+        run: |
+          cd sdk
+          make package/${{ inputs.packages }}/compile V=s -j$(nproc)
+
+      - name: 上传编译好的插件
         uses: actions/upload-artifact@v4
         with:
           name: aarch64_generic-packages
-          path: bin/packages/aarch64_generic/packages_ci/*.ipk
+          path: sdk/bin/packages/aarch64_generic/helloworld/*.ipk
           retention-days: 90
 
       - name: 上传日志（失败时）
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: aarch64_generic-logs
-          path: logs/
-          retention-days: 30
+          name: build-logs
+          path: sdk/logs/
+          retention-days: 14
