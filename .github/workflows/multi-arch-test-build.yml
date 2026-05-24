@@ -46,7 +46,8 @@ jobs:
           du -sh *.tar.xz
           
           tar -xJf immortalwrt-sdk-*.tar.xz
-          mv immortalwrt-sdk-* sdk
+          mkdir -p sdk
+          mv immortalwrt-sdk-*/* sdk/
 
       - name: 配置并更新源
         run: |
