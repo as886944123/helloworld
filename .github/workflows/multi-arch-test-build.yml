@@ -12,16 +12,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # 使用最新的官方支持版本
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
 
-      # 终极权限修复：在任何操作前先重置整个工作目录权限
-      - name: 彻底修复权限问题
+      # 终极权限修复（Ubuntu 22.04专用）
+      - name: 修复工作目录权限
         run: |
-          # 这是唯一能在Ubuntu 22.04上解决chown错误的方法
           sudo chown -R 1001:121 /home/runner/work
           sudo chmod -R 755 /home/runner/work
 
@@ -37,9 +36,10 @@ jobs:
       - name: 安装编译依赖
         run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip
 
+      # 使用清华镜像下载SDK，解决网络问题
       - name: 下载ImmortalWrt 23.05.4 SDK
         run: |
-          wget -q https://downloads.immortalwrt.org/releases/23.05.4/targets/armvirt/64/immortalwrt-sdk-23.05.4-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          wget -q https://mirrors.tuna.tsinghua.edu.cn/immortalwrt/releases/23.05.4/targets/armvirt/64/immortalwrt-sdk-23.05.4-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
           tar xf immortalwrt-sdk-*.tar.xz
           mv immortalwrt-sdk-* sdk
 
@@ -53,10 +53,9 @@ jobs:
       - name: 下载依赖（带重试）
         run: |
           cd sdk
-          # 最多重试5次下载
           for i in {1..5}; do
             make package/${{ inputs.packages }}/download V=s && break
-            echo "下载失败，第$i次重试..."
+            echo "依赖下载失败，第$i次重试..."
             sleep 10
           done
 
