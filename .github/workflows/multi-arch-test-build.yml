@@ -1,38 +1,38 @@
-名称：构建 aarch64_GENERIC: Build aarch64_generic
+name: Build aarch64_generic
 
-在::
-  工作流程_派发::
-    输入：:
-      软件包：:
-        描述: "插件名": "插件名"
-        必填： false: false
-        默认："luci-app-ssr-plus": "luci-app-ssr-plus"
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "插件名"
+        required: false
+        default: "luci-app-ssr-plus"
 
-职位::
-  构建::
-    运行于: ubuntu-22.04: ubuntu-22.04
-    超时时间（分钟）：240: 240
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
 
-    步骤：:
-      - 使用: actions/checkout@v4uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-      #- name: 清理磁盘#- name: 清理磁盘
-        # 使用: jlumbroso/free-disk-space@main#uses: jlumbroso/free-disk-space@main
+      #- name: 清理磁盘
+        #uses: jlumbroso/free-disk-space@main
 
-      #- name: 安装依赖#- name: 安装依赖
-        #运行: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2#run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
+      #- name: 安装依赖
+        #run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
 
-      -       #- 名称: 下载SDK: 下载SDK
-        run        #运行: ||
-          aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst#aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk#mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
+      - name: 下载SDK
+        run: |
+          aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
 
-      #- name: 安装 feeds#- name: 安装 feeds
-        #运行: |#run: |
-          #cd 开发工具包#cd sdk
-          #echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default#echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
-          #./scripts/feeds update -a && ./scripts/feeds install -a#./scripts/feeds update -a && ./scripts/feeds install -a
-          #生成默认配置#make defconfig
+      #- name: 安装 feeds
+        #run: |
+          #cd sdk
+          #echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
+          #./scripts/feeds update -a && ./scripts/feeds install -a
+          #make defconfig
 
       - name: 编译
         run: |
