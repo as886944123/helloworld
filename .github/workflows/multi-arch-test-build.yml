@@ -14,10 +14,8 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    # 关键修复：指定环境变量，解决终端问题
     env:
       TERM: xterm
-      FORCE_UNSAFE_CONFIGURE: 1
 
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +30,7 @@ jobs:
           swap-storage: true
 
       - name: 安装依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip bzip2 p7zip
+        run: sudo apt update && sudo apt install -y build-essential libncurses-dev libssl-dev git wget unzip bzip2
 
       - name: 下载 SDK
         run: |
@@ -40,20 +38,20 @@ jobs:
           mkdir -p sdk
           tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
 
-      - name: 配置插件源
+      - name: 完整更新所有 feeds（必须！解决 luci.mk 缺失）
         run: |
           cd sdk
           echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
-          ./scripts/feeds clean
-          ./scripts/feeds update helloworld
-          ./scripts/feeds install -a -p helloworld
+          
+          # 关键：必须更新所有基础源（luci、packages 等）
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-      # 核心修复：避免自动运行 menuconfig
-      - name: 生成默认配置
+      - name: 生成配置
         run: |
           cd sdk
           make defconfig
-          
+
       - name: 下载依赖
         run: |
           cd sdk
@@ -67,6 +65,6 @@ jobs:
       - name: 上传插件
         uses: actions/upload-artifact@v4
         with:
-          name: immortalwrt-packages
+          name: packages
           path: sdk/bin/packages/*/helloworld/*.ipk
           retention-days: 90
