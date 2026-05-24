@@ -39,9 +39,9 @@ jobs:
       # 使用清华镜像下载SDK，解决网络问题
       - name: 下载ImmortalWrt 23.05.4 SDK
         run: |
-          wget -q https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-imagebuilder-23.05.4-tegra-generic.Linux-x86_64.tar.xz
-          tar xf immortalwrt-imagebuilder-*.tar.xz
-          mv immortalwrt-imagebuilder-* imagebuilder
+          wget -qhttps://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-sdk-23.05.4-tegra-generic_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
+          tar xf immortalwrt-sdk-*.tar.xz
+          mv immortalwrt-sdk-* sdk
 
       - name: 配置并更新源
         run: |
