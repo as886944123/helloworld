@@ -14,26 +14,29 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 最关键：使用Ubuntu 20.04，彻底解决chown权限错误
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 第一步：彻底修复权限问题（最关键）
-      - name: 修复工作目录权限
+      # 提前彻底修复权限，从根源上避免内部chown失败
+      - name: 修复所有权限
         run: |
-          sudo chown -R runner:runner $GITHUB_WORKSPACE
-          sudo chmod -R 755 $GITHUB_WORKSPACE
+          sudo chown -R runner:runner /home/runner/work
+          sudo chmod -R 777 /home/runner/work
 
       - name: 清理磁盘
         uses: jlumbroso/free-disk-space@main
         with:
+          tool-cache: true
           android: true
           dotnet: true
           haskell: true
+          large-packages: true
           docker-images: true
           swap-storage: true
 
@@ -42,7 +45,6 @@ jobs:
           if [ -n "${{ inputs.packages }}" ]; then
             PACKAGES="${{ inputs.packages }}"
           else
-            # 自动检测修改的插件
             PKG_ROOTS=$(find . -name Makefile | grep -v ".*/src/Makefile" | sed -e 's@./\(.*\)/Makefile@\1/@')
             CHANGES=$(git diff --diff-filter=d --name-only HEAD^ HEAD 2>/dev/null || true)
             
@@ -61,34 +63,22 @@ jobs:
           echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
           echo "编译插件: $PACKAGES"
 
-      - name: 编译插件（专门针对helloworld优化）
-        uses: immortalwrt/gh-action-sdk@v6
+      - name: 编译插件（终极稳定版）
+        uses: immortalwrt/gh-action-sdk@v5.1
         env:
           ARCH: aarch64_generic
           TARGET: armvirt-64
           FEEDNAME: packages_ci
           PACKAGES: $PACKAGES
           V: s
-          # 增加下载重试次数和超时时间
-          DOWNLOAD_RETRY: 5
-          DOWNLOAD_TIMEOUT: 60
-          # 使用国内镜像源加速
-          MIRROR: china
-        continue-on-error: true
-
-      # 失败时自动重试一次下载
-      - name: 重试编译（失败时）
-        if: failure()
-        uses: immortalwrt/gh-action-sdk@v6
-        env:
-          ARCH: aarch64_generic
-          TARGET: armvirt-64
-          FEEDNAME: packages_ci
-          PACKAGES: $PACKAGES
-          V: s
+          # 下载优化参数
           DOWNLOAD_RETRY: 10
           DOWNLOAD_TIMEOUT: 120
+          # 使用国内镜像
           MIRROR: china
+          # 跳过不必要的检查
+          NO_REFRESH: 1
+          NO_UPDATE: 1
 
       - name: 上传插件
         uses: actions/upload-artifact@v4
