@@ -20,10 +20,10 @@ jobs:
         uses: jlumbroso/free-disk-space@main
 
       - name: 安装依赖
-        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip
+        run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2 zstd
 
-       - name: 下载SDK
-       run: |
+      - name: 下载SDK
+        run: |
           FILE="releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           MIRRORS=(
             "https://downloads.immortalwrt.org"
@@ -36,7 +36,7 @@ jobs:
             aria2c -x 8 -s 8 --timeout=60 --retries=3 "$url/$FILE" && break
           done
           mkdir -p sdk
-          tar -xJf immortalwrt-sdk-*.tar.xz --strip-components=1 -C sdk
+          tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
 
       - name: 安装 feeds
         run: |
