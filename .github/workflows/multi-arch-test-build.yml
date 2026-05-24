@@ -40,13 +40,12 @@ jobs:
       - name: 下载ImmortalWrt 23.05.4 SDK
         run: |
           aria2c -x 3 https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-sdk-23.05.4-tegra-generic_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
-          if [ -f "immortalwrt-sdk-*.tar.xz" ]; then
-          echo "文件下载成功"
-          else
-          echo "文件下载失败，请检查网络连接"
-          exit 1
-          fi
-          tar xf immortalwrt-sdk-*.tar.xz
+          echo "==== 下载后文件检查 ===="
+          ls -lh *.tar.xz
+          file *.tar.xz
+          du -sh *.tar.xz
+          
+          tar -xJf immortalwrt-sdk-*.tar.xz
           mv immortalwrt-sdk-* sdk
 
       - name: 配置并更新源
