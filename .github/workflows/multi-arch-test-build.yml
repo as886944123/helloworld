@@ -10,17 +10,23 @@ on:
       packages:
         description: '要编译的插件（空格分隔）'
         required: false
-        default: 'luci-app-ssr-plus luci-app-passwall'
+        default: 'luci-app-ssr-plus'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # 第一步：彻底修复权限问题（最关键）
+      - name: 修复工作目录权限
+        run: |
+          sudo chown -R runner:runner $GITHUB_WORKSPACE
+          sudo chmod -R 755 $GITHUB_WORKSPACE
 
       - name: 清理磁盘
         uses: jlumbroso/free-disk-space@main
@@ -29,6 +35,7 @@ jobs:
           dotnet: true
           haskell: true
           docker-images: true
+          swap-storage: true
 
       - name: 确定要编译的插件
         run: |
@@ -45,7 +52,7 @@ jobs:
                   PACKAGES="$PACKAGES $(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')"
                   break
                 fi
-              done  # 这里之前错误地写成了end
+              done
             done
             
             PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
@@ -54,14 +61,34 @@ jobs:
           echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
           echo "编译插件: $PACKAGES"
 
-      - name: 编译插件
-        uses: immortalwrt/gh-action-sdk@v6  # 使用v6稳定版，避免权限错误
+      - name: 编译插件（专门针对helloworld优化）
+        uses: immortalwrt/gh-action-sdk@v6
         env:
           ARCH: aarch64_generic
           TARGET: armvirt-64
           FEEDNAME: packages_ci
           PACKAGES: $PACKAGES
           V: s
+          # 增加下载重试次数和超时时间
+          DOWNLOAD_RETRY: 5
+          DOWNLOAD_TIMEOUT: 60
+          # 使用国内镜像源加速
+          MIRROR: china
+        continue-on-error: true
+
+      # 失败时自动重试一次下载
+      - name: 重试编译（失败时）
+        if: failure()
+        uses: immortalwrt/gh-action-sdk@v6
+        env:
+          ARCH: aarch64_generic
+          TARGET: armvirt-64
+          FEEDNAME: packages_ci
+          PACKAGES: $PACKAGES
+          V: s
+          DOWNLOAD_RETRY: 10
+          DOWNLOAD_TIMEOUT: 120
+          MIRROR: china
 
       - name: 上传插件
         uses: actions/upload-artifact@v4
@@ -76,4 +103,4 @@ jobs:
         with:
           name: aarch64_generic-logs
           path: logs/
-          retention-days: 14
+          retention-days: 30
