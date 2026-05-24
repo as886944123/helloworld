@@ -1,4 +1,4 @@
-name: Test Build
+name: ImmortalWrt Plugin Build
 
 on:
   push:
@@ -8,11 +8,24 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+      - '**.txt'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: '要编译的插件（空格分隔，留空自动检测）'
+        required: false
+        default: ''
+      arch:
+        description: '要编译的架构（all=全部，多个用空格分隔）'
+        required: false
+        default: 'all'
 
 jobs:
   build:
-    name: Test ${{ matrix.arch }}
+    name: Build ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -27,16 +40,23 @@ jobs:
             target: mvebu-cortexa53
           - arch: arm_cortex-a15_neon-vfpv4
             target: armvirt-32
-          - arch: i386_pentium-mmx
-            target: x86-geode
+          - arch: aarch64_cortex-a72
+            target: bcm2711
+          - arch: aarch64_generic
+            target: armvirt-64
           - arch: x86_64
             target: x86-64
 
     steps:
-      - name: Free Disk Space
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
         uses: jlumbroso/free-disk-space@main
         with:
-          tool-cache: true
+          tool-cache: false
           android: true
           dotnet: true
           haskell: true
@@ -44,9 +64,14 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - uses: actions/checkout@v4
+      - name: Cache SDK
+        uses: actions/cache@v4
+        id: cache-sdk
         with:
-          fetch-depth: 0
+          path: sdk
+          key: ${{ matrix.arch }}-${{ hashFiles('**/Makefile') }}
+          restore-keys: |
+            ${{ matrix.arch }}-
 
       - name: Determine branch name
         run: |
@@ -55,51 +80,78 @@ jobs:
           else
             BRANCH="${GITHUB_REF#refs/heads/}"
           fi
-          echo "Building for $BRANCH"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          echo "Building for branch: $BRANCH"
 
-      - name: Determine changed packages
+      - name: Determine packages to build
         run: |
-          PKG_ROOTS=$(find . -name Makefile | \
-            grep -v ".*/src/Makefile" | \
-            sed -e 's@./\(.*\)/Makefile@\1/@')
-          
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            BASE_REF="origin/${BRANCH}"
+          # 手动指定的插件优先
+          if [ -n "${{ inputs.packages }}" ]; then
+            PACKAGES="${{ inputs.packages }}"
           else
-            BASE_REF="HEAD^"
+            # 自动检测修改的插件
+            PKG_ROOTS=$(find . -name Makefile | \
+              grep -v ".*/src/Makefile" | \
+              sed -e 's@./\(.*\)/Makefile@\1/@')
+            
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              BASE_REF="origin/${BRANCH}"
+            else
+              BASE_REF="HEAD^"
+            fi
+            
+            CHANGES=$(git diff --diff-filter=d --name-only $BASE_REF HEAD 2>/dev/null || true)
+
+            PACKAGES=""
+            for ROOT in $PKG_ROOTS; do
+              for CHANGE in $CHANGES; do
+                if [[ "$CHANGE" == "$ROOT"* ]]; then
+                  PACKAGE_NAME=$(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')
+                  PACKAGES="$PACKAGES $PACKAGE_NAME"
+                  break
+                fi
+              done
+            done
+            
+            # 无修改时默认编译的插件
+            PACKAGES="${PACKAGES:-luci-app-ssr-plus luci-app-passwall luci-app-openclash}"
           fi
           
-          CHANGES=$(git diff --diff-filter=d --name-only $BASE_REF HEAD || true)
-
-          PACKAGES=""
-          for ROOT in $PKG_ROOTS; do
-            for CHANGE in $CHANGES; do
-              if [[ "$CHANGE" == "$ROOT"* ]]; then
-                PACKAGE_NAME=$(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')
-                PACKAGES="$PACKAGES $PACKAGE_NAME"
-                break
-              fi
-            done
-          done
-          
-          PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
           PACKAGES=$(echo $PACKAGES | xargs)
-
-          echo "Building packages: $PACKAGES"
           echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
+          echo "Will build packages: $PACKAGES"
 
-      - name: Build
+      - name: Build packages
         uses: immortalwrt/gh-action-sdk@v7
         env:
           ARCH: ${{ matrix.arch }}
-          FEEDNAME: packages_ci
-          V: s
           TARGET: ${{ matrix.target }}
-          PACKAGES: ${{ env.PACKAGES }}
+          FEEDNAME: packages_ci
+          PACKAGES: $PACKAGES
+          V: s
+          NO_REFRESH: 1
+          BUILD_LOG: 1
+        continue-on-error: true
+
+      - name: Check build status
+        id: build-status
+        run: |
+          shopt -s nullglob
+          IPKS=( bin/packages/${{ matrix.arch }}/packages_ci/*.ipk )
+          if [ ${#IPKS[@]} -gt 0 ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "Build succeeded, ${#IPKS[@]} packages generated"
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "Build failed, no packages generated"
+          fi
 
       - name: Move packages
-        run: cp -f bin/packages/${{ matrix.arch }}/packages_ci/*.ipk . 2>/dev/null || true
+        if: steps.build-status.outputs.status == 'success'
+        run: |
+          mkdir -p output
+          cp -f bin/packages/${{ matrix.arch }}/packages_ci/*.ipk output/
+          cp -f bin/packages/${{ matrix.arch }}/packages_ci/Packages* output/
 
       - name: Generate metadata
         run: |
@@ -109,6 +161,10 @@ jobs:
             BASE_ID=$(git rev-parse --short origin/$BRANCH 2>/dev/null || echo "unknown")
             HEAD_ID=$(git rev-parse --short HEAD)
             PRNUMBER=${GITHUB_REF_NAME%/merge}
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            BASE_ID=$(git rev-parse --short HEAD^ 2>/dev/null || echo "unknown")
+            HEAD_ID=$MERGE_ID
+            PRNUMBER="manual-$MERGE_ID"
           else
             BASE_ID=$(git rev-parse --short HEAD^ 2>/dev/null || echo "unknown")
             HEAD_ID=$MERGE_ID
@@ -119,45 +175,64 @@ jobs:
           echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
           
           shopt -s nullglob
-          IPKS=( *.ipk )
+          IPKS=( output/*.ipk )
           
-          cat << EOF > PKG-INFO
-          Metadata-Version: 2.1
-          Name: $ARCHIVE_NAME
-          Version: $BRANCH
-          Author: $GITHUB_ACTOR
-          Home-page: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY
-          Download-URL: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          Summary: $PACKAGES
-          Platform: ${{ matrix.arch }}
-
-          Packages for ImmortalWrt $BRANCH on ${{ matrix.arch }}, built from $PRNUMBER
-          Commit: $HEAD_ID, Base: $BASE_ID
-
-          Modified packages:
+          cat << EOF > output/PKG-INFO
+          ==============================================
+                    ImmortalWrt Plugin Build Info
+          ==============================================
+          Build ID: $GITHUB_RUN_ID
+          Build Time: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Branch: $BRANCH
+          Architecture: ${{ matrix.arch }}
+          Target: ${{ matrix.target }}
+          Commit: $HEAD_ID
+          Base Commit: $BASE_ID
+          Build Trigger: $GITHUB_EVENT_NAME
+          Builder: $GITHUB_ACTOR
+          
+          Built Packages (${#IPKS[@]}):
           EOF
           
-          for p in $PACKAGES; do echo "  - $p" >> PKG-INFO; done
-          echo -e "\nPackage count: ${#IPKS[@]}" >> PKG-INFO
-          echo "Package sizes:" >> PKG-INFO
-          for f in "${IPKS[@]}"; do du -sh "$f" >> PKG-INFO; done
-          [ ${#IPKS[@]} -eq 0 ] && echo "No packages built." >> PKG-INFO
-          cat PKG-INFO
+          for p in $PACKAGES; do echo "  - $p" >> output/PKG-INFO; done
+          echo -e "\nPackage Sizes:" >> output/PKG-INFO
+          for f in "${IPKS[@]}"; do
+            SIZE=$(du -sh "$f" | awk '{print $1}')
+            NAME=$(basename "$f")
+            echo "  $NAME: $SIZE" >> output/PKG-INFO
+          done
+          
+          if [ ${#IPKS[@]} -eq 0 ]; then
+            echo -e "\n⚠️  No packages were built successfully" >> output/PKG-INFO
+          fi
+          
+          echo -e "\n==============================================" >> output/PKG-INFO
+          cat output/PKG-INFO
 
       - name: Upload packages
+        if: steps.build-status.outputs.status == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARCHIVE_NAME }}-packages
-          path: |
-            Packages
-            Packages.*
-            *.ipk
-            PKG-INFO
+          path: output/*
+          retention-days: 30
 
       - name: Upload logs
+        if: steps.build-status.outputs.status == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARCHIVE_NAME }}-logs
-          path: |
-            logs/
-            PKG-INFO
+          path: logs/*
+          retention-days: 14
+
+  cleanup:
+    name: Cleanup old artifacts
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    steps:
+      - name: Delete old artifacts
+        uses: c-hive/gha-remove-artifacts@v1
+        with:
+          age: '7 days'
+          skip-recent: 5
