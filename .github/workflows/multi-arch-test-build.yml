@@ -22,10 +22,10 @@ jobs:
       #- name: 安装依赖
         #run: sudo apt update && sudo apt install -y build-essential libncurses-dev git wget unzip aria2
 
-      - name: 下载SDK
-        run: |
-          aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
+      #- name: 下载SDK
+        #run: |
+          #aria2c -x 8 https://downloads.immortalwrt.org/releases/24.10.1/targets/armsr/armv8/immortalwrt-sdk-24.10.1-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          #mkdir sdk && tar --zstd -xf immortalwrt-sdk-*.tar.zst --strip-components=1 -C sdk
 
       - name: 安装 feeds
         run: |
