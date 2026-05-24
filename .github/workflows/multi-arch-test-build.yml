@@ -1,105 +1,60 @@
-name: ImmortalWrt aarch64_generic Build
+name: Build aarch64_generic
 
 on:
   push:
-    branches:
-      - master
-      - main
+    branches: [master, main]
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - '**.txt'
-      - 'LICENSE'
+    paths-ignore: ['**.md']
   workflow_dispatch:
     inputs:
       packages:
-        description: '要编译的插件（空格分隔，留空自动检测）'
+        description: '要编译的插件（空格分隔）'
         required: false
-        default: ''
+        default: 'luci-app-ssr-plus luci-app-passwall'
 
 jobs:
   build:
-    name: Build aarch64_generic
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Free disk space
+      - name: 清理磁盘
         uses: jlumbroso/free-disk-space@main
         with:
-          tool-cache: false
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
           docker-images: true
-          swap-storage: true
 
-      - name: Cache SDK
-        uses: actions/cache@v4
-        id: cache-sdk
-        with:
-          path: sdk
-          key: aarch64_generic-${{ hashFiles('**/Makefile') }}
-          restore-keys: |
-            aarch64_generic-
-
-      - name: Determine branch name
+      - name: 确定要编译的插件
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            BRANCH="${GITHUB_BASE_REF#refs/heads/}"
-          else
-            BRANCH="${GITHUB_REF#refs/heads/}"
-          fi
-          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-          echo "Building for branch: $BRANCH"
-
-      - name: Determine packages to build
-        run: |
-          # 手动指定的插件优先
           if [ -n "${{ inputs.packages }}" ]; then
             PACKAGES="${{ inputs.packages }}"
           else
             # 自动检测修改的插件
-            PKG_ROOTS=$(find . -name Makefile | \
-              grep -v ".*/src/Makefile" | \
-              sed -e 's@./\(.*\)/Makefile@\1/@')
+            PKG_ROOTS=$(find . -name Makefile | grep -v ".*/src/Makefile" | sed -e 's@./\(.*\)/Makefile@\1/@')
+            CHANGES=$(git diff --diff-filter=d --name-only HEAD^ HEAD 2>/dev/null || true)
             
-            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-              BASE_REF="origin/${BRANCH}"
-            else
-              BASE_REF="HEAD^"
-            fi
-            
-            CHANGES=$(git diff --diff-filter=d --name-only $BASE_REF HEAD 2>/dev/null || true)
-
-            PACKAGES=""
             for ROOT in $PKG_ROOTS; do
               for CHANGE in $CHANGES; do
                 if [[ "$CHANGE" == "$ROOT"* ]]; then
-                  PACKAGE_NAME=$(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')
-                  PACKAGES="$PACKAGES $PACKAGE_NAME"
+                  PACKAGES="$PACKAGES $(echo "$ROOT" | sed -e 's@\(.*\)/@\1@')"
                   break
                 fi
               done
             done
             
-            # 无修改时默认编译的插件（可根据你的需求修改）
-            PACKAGES="${PACKAGES:-luci-app-ssr-plus luci-app-passwall luci-app-openclash}"
+            PACKAGES="${PACKAGES:-luci-app-ssr-plus}"
           fi
           
-          PACKAGES=$(echo $PACKAGES | xargs)
           echo "PACKAGES=$PACKAGES" >> $GITHUB_ENV
-          echo "Will build packages: $PACKAGES"
+          echo "编译插件: $PACKAGES"
 
-      - name: Build packages
+      - name: 编译插件
         uses: immortalwrt/gh-action-sdk@v7
         env:
           ARCH: aarch64_generic
@@ -107,98 +62,18 @@ jobs:
           FEEDNAME: packages_ci
           PACKAGES: $PACKAGES
           V: s
-          NO_REFRESH: 1
-          BUILD_LOG: 1
-        continue-on-error: true
 
-      - name: Check build status
-        id: build-status
-        run: |
-          shopt -s nullglob
-          IPKS=( bin/packages/aarch64_generic/packages_ci/*.ipk )
-          if [ ${#IPKS[@]} -gt 0 ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "✅ Build succeeded, ${#IPKS[@]} packages generated"
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "❌ Build failed, no packages generated"
-          fi
-
-      - name: Move packages
-        if: steps.build-status.outputs.status == 'success'
-        run: |
-          mkdir -p output
-          cp -f bin/packages/aarch64_generic/packages_ci/*.ipk output/
-          cp -f bin/packages/aarch64_generic/packages_ci/Packages* output/
-
-      - name: Generate metadata
-        run: |
-          MERGE_ID=$(git rev-parse --short HEAD)
-          
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            BASE_ID=$(git rev-parse --short origin/$BRANCH 2>/dev/null || echo "unknown")
-            HEAD_ID=$(git rev-parse --short HEAD)
-            PRNUMBER=${GITHUB_REF_NAME%/merge}
-          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            BASE_ID=$(git rev-parse --short HEAD^ 2>/dev/null || echo "unknown")
-            HEAD_ID=$MERGE_ID
-            PRNUMBER="manual-$MERGE_ID"
-          else
-            BASE_ID=$(git rev-parse --short HEAD^ 2>/dev/null || echo "unknown")
-            HEAD_ID=$MERGE_ID
-            PRNUMBER="push-$MERGE_ID"
-          fi
-          
-          ARCHIVE_NAME=aarch64_generic-$PRNUMBER
-          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
-          
-          shopt -s nullglob
-          IPKS=( output/*.ipk )
-          
-          cat << EOF > output/PKG-INFO
-          ==============================================
-                    ImmortalWrt Plugin Build Info
-          ==============================================
-          Build ID: $GITHUB_RUN_ID
-          Build Time: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          Branch: $BRANCH
-          Architecture: aarch64_generic (通用ARM64)
-          Target: armvirt-64
-          Commit: $HEAD_ID
-          Base Commit: $BASE_ID
-          Build Trigger: $GITHUB_EVENT_NAME
-          Builder: $GITHUB_ACTOR
-          
-          Built Packages (${#IPKS[@]}):
-          EOF
-          
-          for p in $PACKAGES; do echo "  - $p" >> output/PKG-INFO; done
-          echo -e "\nPackage Sizes:" >> output/PKG-INFO
-          for f in "${IPKS[@]}"; do
-            SIZE=$(du -sh "$f" | awk '{print $1}')
-            NAME=$(basename "$f")
-            echo "  $NAME: $SIZE" >> output/PKG-INFO
-          done
-          
-          if [ ${#IPKS[@]} -eq 0 ]; then
-            echo -e "\n⚠️  No packages were built successfully" >> output/PKG-INFO
-          fi
-          
-          echo -e "\n==============================================" >> output/PKG-INFO
-          cat output/PKG-INFO
-
-      - name: Upload packages
-        if: steps.build-status.outputs.status == 'success'
+      - name: 上传插件
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARCHIVE_NAME }}-packages
-          path: output/*
-          retention-days: 90  # 免费版最大保留90天
+          name: aarch64_generic-packages
+          path: bin/packages/aarch64_generic/packages_ci/*.ipk
+          retention-days: 90
 
-      - name: Upload logs
-        if: steps.build-status.outputs.status == 'failure'
+      - name: 上传日志（失败时）
         uses: actions/upload-artifact@v4
+        if: failure()
         with:
-          name: ${{ env.ARCHIVE_NAME }}-logs
-          path: logs/*
-          retention-days: 30
+          name: aarch64_generic-logs
+          path: logs/
+          retention-days: 14
