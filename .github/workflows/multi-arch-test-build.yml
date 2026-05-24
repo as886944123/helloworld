@@ -39,7 +39,7 @@ jobs:
       # 使用清华镜像下载SDK，解决网络问题
       - name: 下载ImmortalWrt 23.05.4 SDK
         run: |
-          curl -L -O --fail --retry 3 --retry-delay 2 https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-sdk-23.05.4-tegra-generic_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
+          aria2c -x 3 https://downloads.immortalwrt.org/releases/23.05.4/targets/tegra/generic/immortalwrt-sdk-23.05.4-tegra-generic_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
           if [ -f "immortalwrt-sdk-*.tar.xz" ]; then
           echo "文件下载成功"
           else
