@@ -7,18 +7,13 @@ on:
         required: false
         default: "luci-app-ssr-plus"
 
-# 全局强制启用 Node.js 24，消除 GitHub Actions 警告
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 240
 
     steps:
-      # 升级到支持 Node.js24 的最新稳定版
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v4.3.0
 
       #- name: 清理磁盘
         #uses: jlumbroso/free-disk-space@main
@@ -44,7 +39,6 @@ jobs:
           make package/${{ inputs.packages }}/download V=s -j$(nproc)
           make package/${{ inputs.packages }}/compile V=s -j$(nproc)
 
-      # 升级到支持 Node.js24 的最新稳定版
       - name: 上传插件
         uses: actions/upload-artifact@v4.4.3
         with:
