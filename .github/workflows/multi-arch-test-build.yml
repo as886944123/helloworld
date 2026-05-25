@@ -44,3 +44,4 @@ jobs:
         with:
           name: ${{ inputs.packages }}
           path: "sdk/**/*.ipk"
+         #path: sdk/bin/packages/aarch64_generic/helloworld/*.ipk
