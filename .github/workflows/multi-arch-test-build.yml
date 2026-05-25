@@ -42,6 +42,6 @@ jobs:
       - name: 上传插件
         uses: actions/upload-artifact@v4
         with:
-          name: packages
+          name: ${{ inputs.packages }}
           path: "sdk/**/*.ipk"
          
